@@ -26,7 +26,8 @@
  .meta{font-family:sans-serif;font-size:12px;color:#777;background:#faf8f3;padding:7px 11px;border-radius:6px;margin-bottom:10px}
  label{font-family:sans-serif;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.04em;display:block;margin:8px 0 3px}
  textarea{width:100%;border:1px solid #e3ddd0;border-radius:7px;padding:10px 12px;font-family:Georgia,serif;font-size:14px;line-height:1.5;resize:vertical;background:#fffdf9}
- textarea.notes{font-family:sans-serif;font-size:13px;min-height:42px;background:#fffaf0}
+ textarea.notes{font-family:sans-serif;font-size:13px;min-height:46px;background:#fffaf0}
+ textarea.body{min-height:170px;font-size:14.5px;line-height:1.6;overflow:hidden}
  .row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
  .btns{display:flex;gap:6px}
  .btns button{font-family:sans-serif;font-size:12px;padding:5px 12px;border:1px solid #ddd;border-radius:18px;background:#fff;cursor:pointer;color:#555}
@@ -54,6 +55,7 @@ const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const H={'apikey':ANON,'Authorization':'Bearer '+ANON};
 const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const onCls=s=>s==='approved'?'approved':s==='needs_work'?'needs':'pending';
+function grow(t){t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px';}
 let rows=[];
 
 function counts(){
@@ -94,8 +96,8 @@ function render(){
           <button data-s="pending">Pending</button>
         </div><span class="saved"></span></div>`;
     const sv=d.querySelector('.saved'), body=d.querySelector('.body'), notes=d.querySelector('.notes');
-    body.style.height=body.scrollHeight+'px';
-    body.addEventListener('input',()=>{r.body=body.value;debSave(r.num,{body:body.value},sv);});
+    requestAnimationFrame(()=>grow(body));
+    body.addEventListener('input',()=>{r.body=body.value;grow(body);debSave(r.num,{body:body.value},sv);});
     notes.addEventListener('input',()=>{r.tom_notes=notes.value;debSave(r.num,{tom_notes:notes.value},sv);});
     d.querySelectorAll('.btns button').forEach(b=>b.addEventListener('click',()=>{
       r.status=b.dataset.s; d.className='card '+r.status; setBtns(d,r.status); counts(); save(r.num,{status:r.status},sv);}));
@@ -110,7 +112,7 @@ function applyRemote(n){
   const card=document.getElementById('card'+n.num); if(!card) return;
   card.className='card '+n.status; setBtns(card,n.status);
   const body=card.querySelector('.body'), notes=card.querySelector('.notes');
-  if(document.activeElement!==body && body.value!==n.body){ body.value=n.body; r.body=n.body; body.style.height='auto'; body.style.height=body.scrollHeight+'px'; }
+  if(document.activeElement!==body && body.value!==n.body){ body.value=n.body; r.body=n.body; grow(body); }
   if(document.activeElement!==notes && notes.value!==n.tom_notes){ notes.value=n.tom_notes; r.tom_notes=n.tom_notes; }
   counts();
 }
