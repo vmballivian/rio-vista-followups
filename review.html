@@ -2,6 +2,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Rio Vista REMOTE, draft review</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
  *{box-sizing:border-box}
  body{font-family:Georgia,serif;background:#f8f5ef;color:#222;margin:0;line-height:1.5}
@@ -9,6 +10,8 @@
  .top h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;margin:0 0 6px;font-weight:600}
  .counts{font-family:sans-serif;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
  .counts b{font-weight:700}
+ .live{font-size:11px;background:#1a7a3a;color:#fff;padding:1px 8px;border-radius:10px}
+ .live.off{background:#b8553a}
  .hint{opacity:.7;font-size:11px;margin-left:auto}
  .wrap{max-width:780px;margin:0 auto;padding:20px}
  .card{background:#fff;border:1px solid #e3ddd0;border-left:5px solid #ccc;border-radius:10px;padding:16px 20px;margin:0 0 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -40,7 +43,8 @@
     <span><b id="c-app">0</b> approved</span>
     <span><b id="c-need">0</b> needs work</span>
     <span><b id="c-pend">0</b> pending</span>
-    <span class="hint">edit the body, add notes, set status. everything saves automatically.</span>
+    <span class="live off" id="live">connecting…</span>
+    <span class="hint">edit the body, add notes, set status. saves automatically, live.</span>
   </div>
 </div>
 <div class="wrap" id="list">Loading…</div>
@@ -49,6 +53,7 @@ const URL_='https://jcgjcqhlxgjfrwacshei.supabase.co';
 const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjZ2pjcWhseGdqZnJ3YWNzaGVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzc2ODEsImV4cCI6MjA5NzgxMzY4MX0.b487lunRrOMoIpmyRNSQVYku98SaWjVDMXg2XoLd-3Q';
 const H={'apikey':ANON,'Authorization':'Bearer '+ANON};
 const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const onCls=s=>s==='approved'?'approved':s==='needs_work'?'needs':'pending';
 let rows=[];
 
 function counts(){
@@ -69,6 +74,7 @@ async function save(num,patch,el){
 }
 const deb={};
 function debSave(num,patch,el){clearTimeout(deb[num]);deb[num]=setTimeout(()=>save(num,patch,el),700);}
+function setBtns(card,status){card.querySelectorAll('.btns button').forEach(b=>{b.className=(b.dataset.s===status?'on '+onCls(status):'');});}
 
 function render(){
   const L=document.getElementById('list'); L.innerHTML='';
@@ -82,33 +88,46 @@ function render(){
       <textarea class="body" rows="7">${esc(r.body)}</textarea>
       <label>Tom's notes / comments</label>
       <textarea class="notes" placeholder="anything to change, or context to add...">${esc(r.tom_notes)}</textarea>
-      <div class="row">
-        <div class="btns">
+      <div class="row"><div class="btns">
           <button data-s="approved">Approve</button>
           <button data-s="needs_work">Needs work</button>
           <button data-s="pending">Pending</button>
-        </div>
-        <span class="saved"></span>
-      </div>`;
-    const sv=d.querySelector('.saved');
-    const body=d.querySelector('.body'), notes=d.querySelector('.notes');
+        </div><span class="saved"></span></div>`;
+    const sv=d.querySelector('.saved'), body=d.querySelector('.body'), notes=d.querySelector('.notes');
     body.style.height=body.scrollHeight+'px';
     body.addEventListener('input',()=>{r.body=body.value;debSave(r.num,{body:body.value},sv);});
     notes.addEventListener('input',()=>{r.tom_notes=notes.value;debSave(r.num,{tom_notes:notes.value},sv);});
-    const setBtns=()=>d.querySelectorAll('.btns button').forEach(b=>{
-      const s=b.dataset.s; b.className=(s===r.status?'on '+(s==='approved'?'approved':s==='needs_work'?'needs':'pending'):'');});
     d.querySelectorAll('.btns button').forEach(b=>b.addEventListener('click',()=>{
-      r.status=b.dataset.s; d.className='card '+r.status; setBtns(); counts(); save(r.num,{status:r.status},sv);}));
-    setBtns();
+      r.status=b.dataset.s; d.className='card '+r.status; setBtns(d,r.status); counts(); save(r.num,{status:r.status},sv);}));
+    setBtns(d,r.status);
     L.appendChild(d);
   });
+}
+// realtime: apply remote changes without clobbering the field being edited
+function applyRemote(n){
+  const r=rows.find(x=>x.num===n.num); if(!r) return;
+  r.status=n.status;
+  const card=document.getElementById('card'+n.num); if(!card) return;
+  card.className='card '+n.status; setBtns(card,n.status);
+  const body=card.querySelector('.body'), notes=card.querySelector('.notes');
+  if(document.activeElement!==body && body.value!==n.body){ body.value=n.body; r.body=n.body; body.style.height='auto'; body.style.height=body.scrollHeight+'px'; }
+  if(document.activeElement!==notes && notes.value!==n.tom_notes){ notes.value=n.tom_notes; r.tom_notes=n.tom_notes; }
+  counts();
 }
 (async()=>{
   try{
     const r=await fetch(URL_+'/rest/v1/rio_review?select=*&order=num',{headers:H});
-    rows=await r.json();
-    render(); counts();
-  }catch(e){ document.getElementById('list').innerHTML='<p class="err">Could not load. '+e+'</p>'; }
+    rows=await r.json(); render(); counts();
+  }catch(e){ document.getElementById('list').innerHTML='<p class="err">Could not load. '+e+'</p>'; return; }
+  // live updates
+  try{
+    const sb=window.supabase.createClient(URL_,ANON);
+    sb.channel('rio_review_live')
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'rio_review'},p=>applyRemote(p.new))
+      .subscribe(s=>{const el=document.getElementById('live');
+        if(s==='SUBSCRIBED'){el.textContent='live';el.className='live';}
+        else{el.textContent='offline';el.className='live off';}});
+  }catch(e){ document.getElementById('live').textContent='no live'; }
 })();
 </script>
 </body></html>
