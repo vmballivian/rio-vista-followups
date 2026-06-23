@@ -1,0 +1,114 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Rio Vista REMOTE, draft review</title>
+<style>
+ *{box-sizing:border-box}
+ body{font-family:Georgia,serif;background:#f8f5ef;color:#222;margin:0;line-height:1.5}
+ .top{position:sticky;top:0;background:#1a3a2a;color:#f8f5ef;padding:14px 20px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+ .top h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;margin:0 0 6px;font-weight:600}
+ .counts{font-family:sans-serif;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+ .counts b{font-weight:700}
+ .hint{opacity:.7;font-size:11px;margin-left:auto}
+ .wrap{max-width:780px;margin:0 auto;padding:20px}
+ .card{background:#fff;border:1px solid #e3ddd0;border-left:5px solid #ccc;border-radius:10px;padding:16px 20px;margin:0 0 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+ .card.approved{border-left-color:#1a7a3a}
+ .card.needs_work{border-left-color:#b8553a}
+ .card.pending{border-left-color:#cbbf9e}
+ .hd{font-size:16px;color:#1a3a2a;margin-bottom:6px}
+ .num{color:#b8553a;font-weight:bold;margin-right:4px}
+ .co{font-family:sans-serif;font-size:12px;color:#777;display:block;margin-top:2px}
+ .pri{float:right;font-size:10px;padding:2px 9px;border-radius:20px;background:#eee;color:#555;font-family:sans-serif;text-transform:uppercase}
+ .pri.urgent{background:#b8553a;color:#fff}.pri.high{background:#1a3a2a;color:#fff}
+ .meta{font-family:sans-serif;font-size:12px;color:#777;background:#faf8f3;padding:7px 11px;border-radius:6px;margin-bottom:10px}
+ label{font-family:sans-serif;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.04em;display:block;margin:8px 0 3px}
+ textarea{width:100%;border:1px solid #e3ddd0;border-radius:7px;padding:10px 12px;font-family:Georgia,serif;font-size:14px;line-height:1.5;resize:vertical;background:#fffdf9}
+ textarea.notes{font-family:sans-serif;font-size:13px;min-height:42px;background:#fffaf0}
+ .row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+ .btns{display:flex;gap:6px}
+ .btns button{font-family:sans-serif;font-size:12px;padding:5px 12px;border:1px solid #ddd;border-radius:18px;background:#fff;cursor:pointer;color:#555}
+ .btns button.on.approved{background:#1a7a3a;color:#fff;border-color:#1a7a3a}
+ .btns button.on.needs{background:#b8553a;color:#fff;border-color:#b8553a}
+ .btns button.on.pending{background:#cbbf9e;color:#3a3320;border-color:#cbbf9e}
+ .saved{font-family:sans-serif;font-size:11px;color:#1a7a3a;opacity:0;transition:opacity .2s}
+ .saved.show{opacity:1}
+ .err{color:#b8553a}
+</style></head><body>
+<div class="top">
+  <h1>Rio Vista REMOTE, draft review</h1>
+  <div class="counts">
+    <span><b id="c-app">0</b> approved</span>
+    <span><b id="c-need">0</b> needs work</span>
+    <span><b id="c-pend">0</b> pending</span>
+    <span class="hint">edit the body, add notes, set status. everything saves automatically.</span>
+  </div>
+</div>
+<div class="wrap" id="list">Loading…</div>
+<script>
+const URL_='https://jcgjcqhlxgjfrwacshei.supabase.co';
+const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjZ2pjcWhseGdqZnJ3YWNzaGVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzc2ODEsImV4cCI6MjA5NzgxMzY4MX0.b487lunRrOMoIpmyRNSQVYku98SaWjVDMXg2XoLd-3Q';
+const H={'apikey':ANON,'Authorization':'Bearer '+ANON};
+const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let rows=[];
+
+function counts(){
+  const c={approved:0,needs_work:0,pending:0};
+  rows.forEach(r=>c[r.status]=(c[r.status]||0)+1);
+  document.getElementById('c-app').textContent=c.approved||0;
+  document.getElementById('c-need').textContent=c.needs_work||0;
+  document.getElementById('c-pend').textContent=c.pending||0;
+}
+async function save(num,patch,el){
+  patch.updated_at=new Date().toISOString();
+  try{
+    const r=await fetch(URL_+'/rest/v1/rio_review?num=eq.'+num,{method:'PATCH',
+      headers:{...H,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(patch)});
+    if(!r.ok) throw new Error(r.status);
+    if(el){el.textContent='saved ✓';el.className='saved show';setTimeout(()=>el.className='saved',1400);}
+  }catch(e){ if(el){el.textContent='save failed';el.className='saved show err';} }
+}
+const deb={};
+function debSave(num,patch,el){clearTimeout(deb[num]);deb[num]=setTimeout(()=>save(num,patch,el),700);}
+
+function render(){
+  const L=document.getElementById('list'); L.innerHTML='';
+  rows.forEach(r=>{
+    const d=document.createElement('div'); d.className='card '+r.status; d.id='card'+r.num;
+    d.innerHTML=`<div class="hd"><span class="num">#${r.num}</span> <b>${esc(r.name)}</b>
+      <span class="co">${esc(r.company)} · ${esc(r.country)}</span>
+      <span class="pri ${(r.priority||'').toLowerCase().replace('-','')}">${esc(r.priority)}</span></div>
+      <div class="meta">To: ${esc(r.email)}<br>Subject: ${esc(r.subject)}</div>
+      <label>Email body (editable)</label>
+      <textarea class="body" rows="7">${esc(r.body)}</textarea>
+      <label>Tom's notes / comments</label>
+      <textarea class="notes" placeholder="anything to change, or context to add...">${esc(r.tom_notes)}</textarea>
+      <div class="row">
+        <div class="btns">
+          <button data-s="approved">Approve</button>
+          <button data-s="needs_work">Needs work</button>
+          <button data-s="pending">Pending</button>
+        </div>
+        <span class="saved"></span>
+      </div>`;
+    const sv=d.querySelector('.saved');
+    const body=d.querySelector('.body'), notes=d.querySelector('.notes');
+    body.style.height=body.scrollHeight+'px';
+    body.addEventListener('input',()=>{r.body=body.value;debSave(r.num,{body:body.value},sv);});
+    notes.addEventListener('input',()=>{r.tom_notes=notes.value;debSave(r.num,{tom_notes:notes.value},sv);});
+    const setBtns=()=>d.querySelectorAll('.btns button').forEach(b=>{
+      const s=b.dataset.s; b.className=(s===r.status?'on '+(s==='approved'?'approved':s==='needs_work'?'needs':'pending'):'');});
+    d.querySelectorAll('.btns button').forEach(b=>b.addEventListener('click',()=>{
+      r.status=b.dataset.s; d.className='card '+r.status; setBtns(); counts(); save(r.num,{status:r.status},sv);}));
+    setBtns();
+    L.appendChild(d);
+  });
+}
+(async()=>{
+  try{
+    const r=await fetch(URL_+'/rest/v1/rio_review?select=*&order=num',{headers:H});
+    rows=await r.json();
+    render(); counts();
+  }catch(e){ document.getElementById('list').innerHTML='<p class="err">Could not load. '+e+'</p>'; }
+})();
+</script>
+</body></html>
